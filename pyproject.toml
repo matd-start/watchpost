@@ -1,0 +1,18 @@
+# Configuración de herramientas. Las dependencias viven en requirements.txt
+# porque es lo más simple mientras se aprende; aquí solo van ruff y pytest.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# conftest.py tiene que configurar el entorno antes de importar la app
+"server/tests/conftest.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["server/tests", "agent/tests"]
+pythonpath = ["."]
+addopts = "-q"

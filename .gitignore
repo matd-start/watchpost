@@ -1,0 +1,25 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Secretos: nunca se suben
+.env
+
+# Base de datos y artefactos locales
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editores
+.vscode/
+.idea/
+*.swp
