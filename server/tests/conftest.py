@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel
 
-_TMP_DIR = Path(tempfile.mkdtemp(prefix="vigia-test-"))
-os.environ["VIGIA_DATABASE_URL"] = f"sqlite:///{(_TMP_DIR / 'test.db').as_posix()}"
-os.environ["VIGIA_API_KEY"] = "clave-de-prueba"
+_TMP_DIR = Path(tempfile.mkdtemp(prefix="watchpost-test-"))
+os.environ["WATCHPOST_DATABASE_URL"] = f"sqlite:///{(_TMP_DIR / 'test.db').as_posix()}"
+os.environ["WATCHPOST_API_KEY"] = "clave-de-prueba"
 
 from server.app.db import engine  # noqa: E402
 from server.app.main import app  # noqa: E402

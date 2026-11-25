@@ -1,1 +1,1 @@
-"""Servidor de Vigía: API HTTP y almacenamiento."""
+"""Servidor de Watchpost: API HTTP y almacenamiento."""

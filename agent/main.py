@@ -13,7 +13,7 @@ from .collector import collect, system_name
 from .config import AgentConfig
 from .sender import Point, Sender
 
-logger = logging.getLogger("vigia.agent")
+logger = logging.getLogger("watchpost.agent")
 
 
 def iso_now() -> str:

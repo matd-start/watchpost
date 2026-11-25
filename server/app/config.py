@@ -6,12 +6,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Cada campo se puede sobreescribir con una variable `VIGIA_*`."""
+    """Cada campo se puede sobreescribir con una variable `WATCHPOST_*`."""
 
-    model_config = SettingsConfigDict(env_prefix="VIGIA_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="WATCHPOST_", env_file=".env", extra="ignore")
 
     api_key: str = "cambia-esta-clave"
-    database_url: str = "sqlite:///data/vigia.db"
+    database_url: str = "sqlite:///data/watchpost.db"
     online_threshold_seconds: int = 60
 
 

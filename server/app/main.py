@@ -14,7 +14,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Vigía", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Watchpost", version="0.1.0", lifespan=lifespan)
 app.include_router(ingest.router)
 app.include_router(hosts.router)
 

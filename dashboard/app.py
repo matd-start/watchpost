@@ -1,4 +1,4 @@
-"""Dashboard mínimo de Vigía.
+"""Dashboard mínimo de Watchpost.
 
 Consulta la API, nunca la base de datos: la API es la única dueña de los datos.
 """
@@ -8,7 +8,7 @@ import os
 import httpx
 import streamlit as st
 
-API_URL = os.environ.get("VIGIA_SERVER_URL", "http://127.0.0.1:8000")
+API_URL = os.environ.get("WATCHPOST_SERVER_URL", "http://127.0.0.1:8000")
 TIMEOUT = 5.0
 LABELS = {
     "cpu.percent": "CPU",
@@ -16,7 +16,7 @@ LABELS = {
     "disk.percent": "Disco",
 }
 
-st.set_page_config(page_title="Vigía", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="Watchpost", page_icon="🛰️", layout="wide")
 
 
 def get_json(path: str):
@@ -53,5 +53,5 @@ def render_hosts() -> None:
         st.caption(f"Última vez visto: {host['last_seen_at']} (UTC)")
 
 
-st.title("Vigía")
+st.title("Watchpost")
 render_hosts()

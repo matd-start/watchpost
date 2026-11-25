@@ -6,9 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AgentConfig(BaseSettings):
-    """Cada campo se puede sobreescribir con una variable `VIGIA_*`."""
+    """Cada campo se puede sobreescribir con una variable `WATCHPOST_*`."""
 
-    model_config = SettingsConfigDict(env_prefix="VIGIA_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="WATCHPOST_", env_file=".env", extra="ignore")
 
     server_url: str = "http://127.0.0.1:8000"
     api_key: str = "cambia-esta-clave"

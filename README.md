@@ -1,4 +1,4 @@
-# Vigía
+# Watchpost
 
 Mini Datadog autohospedado en Python. Un agente mide CPU, memoria y disco de una
 máquina, los envía por HTTP a una API, y un dashboard muestra el estado.
@@ -25,7 +25,7 @@ Python 3.12 o superior (probado con 3.13) y Git.
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-copy .env.example .env      # y cambia VIGIA_API_KEY
+copy .env.example .env      # y cambia WATCHPOST_API_KEY
 ```
 
 Después, en tres terminales con el entorno activado:
