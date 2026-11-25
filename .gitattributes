@@ -1,0 +1,6 @@
+# Normaliza los finales de línea: el repo se probará también en WSL/Linux.
+* text=auto eol=lf
+
+*.db binary
+*.db-wal binary
+*.db-shm binary
