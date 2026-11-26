@@ -43,6 +43,7 @@ def seed_points(
     values: list[float],
     *,
     start: datetime = BASE,
+    step: int = 10,
     metric: str = "cpu.percent",
     host_name: str = "laptop-01",
 ) -> Host:
@@ -58,7 +59,7 @@ def seed_points(
                 host_id=host.id,
                 metric=metric,
                 value=value,
-                ts=start + timedelta(seconds=10 * index),
+                ts=start + timedelta(seconds=step * index),
             )
         )
     session.commit()
@@ -90,6 +91,21 @@ def test_does_not_fire_before_the_window_is_covered(client: TestClient, session:
     seed_points(session, [100.0] * 6, start=BASE + timedelta(seconds=90))
 
     assert evaluate(session, [make_rule()], BASE + timedelta(seconds=140)) == []
+
+
+def test_coverage_does_not_depend_on_aligned_samples(
+    client: TestClient, session: Session
+) -> None:
+    """Regresión: con muestras cada 6 s y desfasadas, la ventana sigue estando cubierta.
+
+    La primera versión comparaba el mínimo de la ventana con su propio inicio, así que
+    solo funcionaba si una muestra caía exactamente en el borde. Con datos reales, nunca.
+    """
+    seed_points(session, [86.0] * 24, start=BASE + timedelta(seconds=4), step=6)
+
+    transitions = evaluate(session, [make_rule()], BASE + timedelta(seconds=144))
+
+    assert [transition.state for transition in transitions] == ["firing"]
 
 
 def test_evaluating_twice_notifies_once(client: TestClient, session: Session) -> None:
