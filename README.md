@@ -3,9 +3,9 @@
 Mini Datadog autohospedado en Python. Un agente mide CPU, memoria y disco de una
 máquina, los envía por HTTP a una API, y un dashboard muestra el estado.
 
-**Estado: v0.1.0 — esqueleto que camina.** El recorrido completo funciona
-(agente → API → SQLite → dashboard). Las gráficas históricas, las reglas de
-alerta y Docker llegan en las fases siguientes.
+**Estado: v0.2.0 — histórico con downsampling.** El recorrido completo funciona
+(agente → API → SQLite → dashboard) y la gráfica histórica responde en milisegundos.
+Las reglas de alerta y Docker llegan en las fases siguientes.
 
 ## Qué hace hoy
 
@@ -14,10 +14,22 @@ alerta y Docker llegan en las fases siguientes.
 - Si el servidor no responde, guarda hasta 500 puntos en memoria y los reenvía en el ciclo siguiente.
 - El servidor registra los hosts nuevos solos y guarda los puntos en SQLite.
 - El dashboard muestra cada host, su estado (en línea / desconectado) y el último valor de cada métrica.
+- La API devuelve el histórico agregado por cubos (`avg`, `min`, `max`, `count`) y el
+  dashboard lo pinta con rangos de 15 min, 1 h, 24 h y 7 días.
 
 ## Requisitos
 
-Python 3.12 o superior (probado con 3.13) y Git.
+Python 3.12 o superior (probado con 3.13 en Windows 11 y 3.12 en Ubuntu 22.04) y Git.
+
+En Ubuntu 22.04 el Python del sistema es 3.10 y **no sirve**: falla con
+`cannot import name 'UTC' from 'datetime'`. Sin privilegios de administrador:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+uv venv --python 3.12
+uv pip install -r requirements-dev.txt
+```
 
 ## Arranque rápido
 
@@ -50,6 +62,7 @@ La documentación interactiva de la API está en `http://127.0.0.1:8000/docs`.
 | POST | `/api/v1/ingest` | Recibir un lote de métricas (requiere `X-API-Key`) |
 | GET | `/api/v1/hosts` | Listar hosts y su estado |
 | GET | `/api/v1/hosts/{host}/latest` | Último valor de cada métrica de un host |
+| GET | `/api/v1/hosts/{host}/metrics` | Serie histórica por cubos entre `from` y `to` |
 | GET | `/health` | Comprobar que la API está viva |
 
 Ejemplo de ingesta:
@@ -100,18 +113,21 @@ ruff check .
 Las pruebas de la API levantan una base de datos temporal y usan `TestClient`:
 cubren ingesta válida, clave incorrecta, valor fuera de rango, fecha futura,
 host nuevo, estado en línea/desconectado, idempotencia y consulta del último valor.
+Las de la serie siembran fechas fijas y comprueban la agregación por cubos, el
+borde exclusivo de `to`, los cubos parciales y los errores de rango.
 
 ## Limitaciones conocidas
 
 - Las lecturas de la API no piden clave.
-- No hay gráficas históricas todavía (fase 3) ni agregación por rangos.
+- Dos agentes con el mismo `hostname` (Windows y WSL2 en la misma máquina) escriben
+  en el mismo host: el campo `os` oscila entre ambos y las series se mezclan.
 - Si un host deja de reportar mientras tiene una alerta activa, esa alerta no se
   resuelve sola (fase 4).
-- Solo probado en Windows 11; `psutil` es multiplataforma, falta la prueba en Linux.
+- Probado en Windows 11 y en Ubuntu 22.04 (WSL2); el dashboard solo se ha abierto en local.
 
 ## Hoja de ruta
 
-- **v0.2** Histórico de métricas y gráficas por rango, con downsampling por cubos.
+- **v0.2** Histórico de métricas y gráficas por rango, con downsampling por cubos. ✅
 - **v0.3** Reglas de alerta, worker evaluador y notificación a Discord.
 - **v0.4** Retención, Docker Compose y CI en GitHub Actions.
 - **v1.0** README de portafolio, diagrama, GIF y release.
