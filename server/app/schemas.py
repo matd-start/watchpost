@@ -6,7 +6,7 @@ Los modelos de Pydantic son el contrato: lo que entra se valida aquí y no en la
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 METRICS = ("cpu.percent", "mem.percent", "disk.percent")
 
@@ -47,3 +47,31 @@ class HostOut(BaseModel):
 class LatestOut(BaseModel):
     host: str
     values: dict[str, float]
+
+
+class BucketOut(BaseModel):
+    """Un cubo de agregación: no es un instante, es un intervalo resumido.
+
+    `count` permite distinguir un cubo completo de uno parcial (el primero y el
+    último de cualquier ventana suelen serlo).
+    """
+
+    bucket_start: datetime
+    avg: float
+    min: float
+    max: float
+    count: int
+
+
+class SeriesOut(BaseModel):
+    """Serie de tiempo ya reducida: como mucho unos cientos de cubos."""
+
+    # `from` es palabra reservada en Python; en el JSON se sigue llamando "from".
+    model_config = ConfigDict(populate_by_name=True)
+
+    host: str
+    metric: MetricName
+    step_seconds: int
+    from_: datetime = Field(alias="from")
+    to: datetime
+    points: list[BucketOut]
