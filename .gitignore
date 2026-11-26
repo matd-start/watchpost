@@ -4,6 +4,7 @@ venv/
 
 # Secretos: nunca se suben
 .env
+rules.toml
 
 # Base de datos y artefactos locales
 data/

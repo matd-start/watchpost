@@ -16,6 +16,8 @@ Las reglas de alerta y Docker llegan en las fases siguientes.
 - El dashboard muestra cada host, su estado (en línea / desconectado) y el último valor de cada métrica.
 - La API devuelve el histórico agregado por cubos (`avg`, `min`, `max`, `count`) y el
   dashboard lo pinta con rangos de 15 min, 1 h, 24 h y 7 días.
+- Un worker evalúa reglas de umbral sobre ventanas sostenidas y avisa a Discord
+  (con histéresis, sin repetir el mensaje mientras el problema siga).
 
 ## Requisitos
 
@@ -77,6 +79,28 @@ Ejemplo de ingesta:
   ]
 }
 ```
+
+## Alertas
+
+Copia `rules.example.toml` a `rules.toml`, pon tu webhook en `.env` y arranca el worker
+(en una cuarta terminal):
+
+```powershell
+copy rules.example.toml rules.toml
+python -m server.worker
+```
+
+| Variable | Uso |
+|---|---|
+| `WATCHPOST_DISCORD_WEBHOOK_URL` | URL del webhook de Discord (si falta, solo se registra en el log) |
+| `WATCHPOST_ALERT_INTERVAL_SECONDS` | Cada cuánto se evalúan las reglas (30 por defecto) |
+| `WATCHPOST_RULES_PATH` | Ruta del fichero de reglas (`rules.toml` por defecto) |
+
+Cada regla tiene un umbral (`threshold`), un umbral de salida (`recover`) y una
+ventana (`for_seconds`). Se dispara solo si **toda** la ventana cruza el umbral, y se
+resuelve solo si toda la ventana cruza `recover`: entre ambos hay una banda muerta
+que evita los mensajes en hosts que oscilan. Además se notifica únicamente cuando
+el estado cambia, así que un problema de 6 horas es un mensaje, no setecientos.
 
 ## Arquitectura
 

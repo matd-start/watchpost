@@ -1,0 +1,32 @@
+# Reglas de alerta de Watchpost.
+# Copia este fichero a `rules.toml` (ignorado por Git) y ajusta los umbrales.
+#
+# Cada regla se evalúa cada 30 s contra la ventana de `for_seconds`.
+# Se dispara cuando TODA la ventana cumple la condición (no un punto suelto),
+# y se resuelve solo cuando toda la ventana cruza `recover`: esa banda muerta
+# es la histéresis, la que evita el parloteo en hosts que oscilan.
+
+[[rule]]
+name = "CPU alta"
+metric = "cpu.percent"
+operator = ">"        # se dispara si toda la ventana está por encima
+threshold = 85.0
+recover = 80.0        # se resuelve solo por debajo de esto
+for_seconds = 120
+# host = "laptop-01"  # sin esta línea, la regla vale para todos los hosts
+
+[[rule]]
+name = "Memoria al límite"
+metric = "mem.percent"
+operator = ">"
+threshold = 92.0
+recover = 88.0
+for_seconds = 300
+
+[[rule]]
+name = "Disco lleno"
+metric = "disk.percent"
+operator = ">"
+threshold = 90.0
+recover = 85.0
+for_seconds = 600

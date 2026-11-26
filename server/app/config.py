@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     api_key: str = "cambia-esta-clave"
     database_url: str = "sqlite:///data/watchpost.db"
     online_threshold_seconds: int = 60
+    discord_webhook_url: str = ""
+    alert_interval_seconds: int = 30
+    rules_path: str = "rules.toml"
 
 
 @lru_cache
