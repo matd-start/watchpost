@@ -3,8 +3,8 @@
 
 [project]
 name = "watchpost"
-version = "0.2.0"
-description = "Mini Datadog autohospedado: agente, API, SQLite y dashboard"
+version = "0.3.0"
+description = "Mini Datadog autohospedado: agente, API, SQLite, dashboard y alertas"
 # El código usa `datetime.UTC` (3.11+) y ruff apunta a 3.12: Ubuntu 22.04 trae 3.10.
 requires-python = ">=3.12"
 

@@ -9,40 +9,59 @@ import logging
 import time
 from datetime import datetime
 
+import httpx
 from sqlmodel import Session
 
 from .app.config import get_settings
 from .app.db import engine, init_db
 from .app.services.alerts import Rule, Transition, evaluate, load_rules
-from .app.services.notifier import format_message, send_discord
+from .app.services.notifier import format_message, send_discord, send_ntfy
 
 logger = logging.getLogger("watchpost.worker")
 
+# Canales intercambiables: misma firma `(url, texto)`, distinto destino.
+SENDERS = {"discord": send_discord, "ntfy": send_ntfy}
 
-def notify(transitions: list[Transition], webhook_url: str) -> None:
+
+def notify(transitions: list[Transition], channel: str, url: str) -> None:
+    if not url:
+        for transition in transitions:
+            logger.info(format_message(transition))
+        logger.warning("Sin WATCHPOST_ALERT_URL: las alertas solo quedan en el log")
+        return
+
+    send = SENDERS[channel]
     for transition in transitions:
         text = format_message(transition)
         logger.info(text)
-        if not webhook_url:
-            logger.warning("Sin WATCHPOST_DISCORD_WEBHOOK_URL: la alerta solo queda en el log")
-            continue
         try:
-            send_discord(webhook_url, text)
+            send(url, text)
+        except httpx.HTTPStatusError as exc:
+            # El mensaje de httpx incluye la URL, que en ntfy es el secreto:
+            # se registra el código, no la excepción completa.
+            logger.error(
+                "El canal %s respondió %s; la alerta no se envió",
+                channel,
+                exc.response.status_code,
+            )
+        except httpx.RequestError as exc:
+            logger.error("No pude conectar con el canal %s (%s)", channel, type(exc).__name__)
         except Exception:  # noqa: BLE001
-            # Discord caído no puede tumbar el worker: el estado ya está guardado,
+            # El canal caído no puede tumbar el worker: el estado ya está guardado,
             # así que la próxima transición seguirá funcionando.
-            logger.exception("No pude enviar la alerta a Discord")
+            logger.exception("Fallo inesperado al enviar la alerta por %s", channel)
 
 
 def run_once(
     session: Session,
     rules: list[Rule],
-    webhook_url: str,
+    channel: str,
+    url: str,
     now: datetime | None = None,
 ) -> list[Transition]:
     """Una pasada: evaluar y avisar. Es lo que el worker repite cada 30 s."""
     transitions = evaluate(session, rules, now)
-    notify(transitions, webhook_url)
+    notify(transitions, channel, url)
     return transitions
 
 
@@ -60,14 +79,14 @@ def main() -> None:
         settings.rules_path,
         settings.alert_interval_seconds,
     )
-    if not settings.discord_webhook_url:
-        logger.warning("Falta WATCHPOST_DISCORD_WEBHOOK_URL: las alertas solo se registrarán")
+    if not settings.alert_url:
+        logger.warning("Falta WATCHPOST_ALERT_URL: las alertas solo se registrarán")
 
     try:
         while True:
             with Session(engine) as session:
                 try:
-                    run_once(session, rules, settings.discord_webhook_url)
+                    run_once(session, rules, settings.alert_channel, settings.alert_url)
                 except Exception:  # noqa: BLE001
                     logger.exception("Falló una evaluación de alertas")
             time.sleep(settings.alert_interval_seconds)

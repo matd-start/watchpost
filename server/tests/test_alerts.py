@@ -4,8 +4,10 @@ Todo usa un `now` explícito: no hay `sleep`, así que una ventana de 5 minutos
 se prueba en milisegundos.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -19,7 +21,7 @@ from server.app.services.alerts import (
     evaluate,
     load_rules,
 )
-from server.app.services.notifier import format_message, send_discord
+from server.app.services.notifier import format_message, send_discord, send_ntfy
 
 BASE = datetime(2026, 1, 1, tzinfo=UTC)
 WEBHOOK = "https://discord.test/webhook"
@@ -237,15 +239,69 @@ def test_send_discord_posts_the_content() -> None:
     assert calls == [(WEBHOOK, {"json": {"content": "hola"}, "timeout": 5.0})]
 
 
+def test_send_ntfy_posts_plain_text() -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url: str, **kwargs) -> FakeResponse:
+        calls.append((url, kwargs))
+        return FakeResponse()
+
+    send_ntfy("https://ntfy.sh/tema", "🔴 **CPU alta** en `host`", post=fake_post)
+
+    url, kwargs = calls[0]
+    assert url == "https://ntfy.sh/tema"
+    assert kwargs["content"] == "🔴 CPU alta en host".encode()
+    assert kwargs["headers"]["Content-Type"].startswith("text/plain")
+    assert kwargs["headers"]["Title"] == "Watchpost"
+    assert kwargs["timeout"] == 5.0
+
+
 def test_worker_sends_only_on_transitions(
     client: TestClient, session: Session, monkeypatch
 ) -> None:
     sent: list[str] = []
-    monkeypatch.setattr(worker, "send_discord", lambda url, text: sent.append(text))
+    monkeypatch.setitem(worker.SENDERS, "discord", lambda url, text: sent.append(text))
     seed_points(session, [86.0] * 20)
 
-    worker.run_once(session, [make_rule()], WEBHOOK, BASE + timedelta(seconds=140))
-    worker.run_once(session, [make_rule()], WEBHOOK, BASE + timedelta(seconds=150))
+    worker.run_once(session, [make_rule()], "discord", WEBHOOK, BASE + timedelta(seconds=140))
+    worker.run_once(session, [make_rule()], "discord", WEBHOOK, BASE + timedelta(seconds=150))
 
     assert len(sent) == 1
     assert "laptop-01" in sent[0]
+
+
+def test_worker_accepts_the_ntfy_channel(client: TestClient, session: Session, monkeypatch) -> None:
+    sent: list[str] = []
+    monkeypatch.setitem(worker.SENDERS, "ntfy", lambda url, text: sent.append(url))
+    seed_points(session, [86.0] * 20)
+
+    worker.run_once(
+        session, [make_rule()], "ntfy", "https://ntfy.sh/tema", BASE + timedelta(seconds=140)
+    )
+
+    assert sent == ["https://ntfy.sh/tema"]
+
+
+def test_worker_does_not_log_the_alert_url(
+    client: TestClient, session: Session, monkeypatch, caplog
+) -> None:
+    """La URL de ntfy es el secreto: no puede acabar en un log compartido."""
+    secret_url = "https://ntfy.sh/tema-secreto"
+
+    def boom(url: str, text: str) -> None:
+        raise httpx.ConnectError(f"No conecta con {url}")
+
+    monkeypatch.setitem(worker.SENDERS, "ntfy", boom)
+    seed_points(session, [86.0] * 20)
+
+    with caplog.at_level(logging.ERROR, logger="watchpost.worker"):
+        worker.run_once(
+            session, [make_rule()], "ntfy", secret_url, BASE + timedelta(seconds=140)
+        )
+
+    assert secret_url not in caplog.text
+    assert "ConnectError" in caplog.text

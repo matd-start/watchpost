@@ -3,9 +3,9 @@
 Mini Datadog autohospedado en Python. Un agente mide CPU, memoria y disco de una
 máquina, los envía por HTTP a una API, y un dashboard muestra el estado.
 
-**Estado: v0.2.0 — histórico con downsampling.** El recorrido completo funciona
-(agente → API → SQLite → dashboard) y la gráfica histórica responde en milisegundos.
-Las reglas de alerta y Docker llegan en las fases siguientes.
+**Estado: v0.3.0 — alertas por umbral.** El recorrido completo funciona
+(agente → API → SQLite → dashboard → worker → Discord/ntfy) y la gráfica histórica
+responde en milisegundos. Docker y CI llegan en v0.4.
 
 ## Qué hace hoy
 
@@ -16,8 +16,8 @@ Las reglas de alerta y Docker llegan en las fases siguientes.
 - El dashboard muestra cada host, su estado (en línea / desconectado) y el último valor de cada métrica.
 - La API devuelve el histórico agregado por cubos (`avg`, `min`, `max`, `count`) y el
   dashboard lo pinta con rangos de 15 min, 1 h, 24 h y 7 días.
-- Un worker evalúa reglas de umbral sobre ventanas sostenidas y avisa a Discord
-  (con histéresis, sin repetir el mensaje mientras el problema siga).
+- Un worker evalúa reglas de umbral sobre ventanas sostenidas y avisa a Discord o
+  ntfy (con histéresis, sin repetir el mensaje mientras el problema siga).
 
 ## Requisitos
 
@@ -82,8 +82,8 @@ Ejemplo de ingesta:
 
 ## Alertas
 
-Copia `rules.example.toml` a `rules.toml`, pon tu webhook en `.env` y arranca el worker
-(en una cuarta terminal):
+Copia `rules.example.toml` a `rules.toml`, elige un canal en `.env` y arranca el
+worker (en una cuarta terminal):
 
 ```powershell
 copy rules.example.toml rules.toml
@@ -92,7 +92,8 @@ python -m server.worker
 
 | Variable | Uso |
 |---|---|
-| `WATCHPOST_DISCORD_WEBHOOK_URL` | URL del webhook de Discord (si falta, solo se registra en el log) |
+| `WATCHPOST_ALERT_CHANNEL` | `discord` o `ntfy` |
+| `WATCHPOST_ALERT_URL` | URL del webhook o del tema (si falta, solo se registra en el log) |
 | `WATCHPOST_ALERT_INTERVAL_SECONDS` | Cada cuánto se evalúan las reglas (30 por defecto) |
 | `WATCHPOST_RULES_PATH` | Ruta del fichero de reglas (`rules.toml` por defecto) |
 
@@ -102,18 +103,50 @@ resuelve solo si toda la ventana cruza `recover`: entre ambos hay una banda muer
 que evita los mensajes en hosts que oscilan. Además se notifica únicamente cuando
 el estado cambia, así que un problema de 6 horas es un mensaje, no setecientos.
 
+### Discord
+
+Crea un webhook en el canal, copia su URL y pon en `.env`:
+
+```dotenv
+WATCHPOST_ALERT_CHANNEL=discord
+WATCHPOST_ALERT_URL=https://discord.com/api/webhooks/...
+```
+
+No hace falta bot ni token: el webhook es la credencial.
+
+### ntfy (sin cuenta)
+
+1. Elige un tema largo y aleatorio, por ejemplo `watchpost-` seguido de 32
+   caracteres. **El tema es la contraseña.**
+2. Pon en `.env`:
+
+   ```dotenv
+   WATCHPOST_ALERT_CHANNEL=ntfy
+   WATCHPOST_ALERT_URL=https://ntfy.sh/tu-tema-aleatorio
+   ```
+
+3. Abre esa URL en el navegador o suscríbete desde la app de ntfy.
+4. Arranca el worker y espera una transición.
+
+**Seguridad:** ntfy.sh es un servicio público. Quien conozca el tema puede leer
+y publicar en él; un nombre aleatorio da oscuridad, no control de acceso. No
+envíes datos sensibles, no pegues la URL en Git, README, notas o capturas, y si
+se filtra, cambia el tema. Para ACL real, autohospeda ntfy o usa sus temas
+reservados de pago. La URL vive solo en `.env`, que está ignorado por Git.
+
 ## Arquitectura
 
 ```
 [agente] --POST /ingest--> [API FastAPI] --escribe--> [SQLite]
-                                ^
-                                | GET
-                        [dashboard Streamlit]
+                                ^                         |
+                                | GET                     | evalúa
+                        [dashboard Streamlit]      [worker] --avisa--> Discord / ntfy
 ```
 
 - **Agente** (`agent/`): mide y envía. Sin asyncio: un bucle bloqueante se lee mejor.
 - **API** (`server/app/`): routers finos, lógica en `services/`, datos en `models.py`.
 - **Dashboard** (`dashboard/`): consulta la API, nunca la base de datos.
+- **Worker** (`server/worker.py`): evalúa las reglas cada 30 s y avisa solo en transiciones.
 
 ## Decisiones de diseño
 
@@ -126,6 +159,7 @@ el estado cambia, así que un problema de 6 horas es un mensaje, no setecientos.
 | Lecturas abiertas, escritura con API key | Todo autenticado | El dashboard es local; la ingesta es la superficie expuesta |
 | Streamlit | React | Un solo lenguaje mientras se aprende |
 | Sin asyncio en el agente | `asyncio` + `httpx.AsyncClient` | Un `while` con `sleep` es suficiente y se depura mejor |
+| URL de alerta como secreto | Guardarla en `rules.toml` o en el código | `.env` está ignorado; en ntfy el tema es la contraseña y no debe acabar en logs ni capturas |
 
 ## Pruebas
 
@@ -139,6 +173,9 @@ cubren ingesta válida, clave incorrecta, valor fuera de rango, fecha futura,
 host nuevo, estado en línea/desconectado, idempotencia y consulta del último valor.
 Las de la serie siembran fechas fijas y comprueban la agregación por cubos, el
 borde exclusivo de `to`, los cubos parciales y los errores de rango.
+Las de alertas comprueban la ventana sostenida, la histéresis, la cobertura con
+muestras desalineadas, el formato del mensaje y que la URL del canal no acabe en
+los logs.
 
 ## Limitaciones conocidas
 
@@ -147,11 +184,13 @@ borde exclusivo de `to`, los cubos parciales y los errores de rango.
   en el mismo host: el campo `os` oscila entre ambos y las series se mezclan.
 - Si un host deja de reportar mientras tiene una alerta activa, esa alerta no se
   resuelve sola (fase 4).
+- El canal ntfy.sh es público y best-effort: los mensajes se cachean 12 h y, si el
+  servicio cae, la transición se pierde (el worker sigue funcionando).
 - Probado en Windows 11 y en Ubuntu 22.04 (WSL2); el dashboard solo se ha abierto en local.
 
 ## Hoja de ruta
 
 - **v0.2** Histórico de métricas y gráficas por rango, con downsampling por cubos. ✅
-- **v0.3** Reglas de alerta, worker evaluador y notificación a Discord.
+- **v0.3** Reglas de alerta, worker evaluador y notificación a Discord o ntfy. ✅
 - **v0.4** Retención, Docker Compose y CI en GitHub Actions.
 - **v1.0** README de portafolio, diagrama, GIF y release.
